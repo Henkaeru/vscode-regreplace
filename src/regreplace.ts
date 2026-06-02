@@ -97,7 +97,7 @@ export function calculateTargetTextForAllRules(
 					return;
 				}
 
-				const flags = command.global === false ? 'u' : 'gu';
+				const flags = command.flags ?? 'g';
 				const reg = new RegExp(regexQuery, flags);
 				resultText = resultText.replace(reg, regexReplace);
 			} catch (error) {
@@ -312,5 +312,5 @@ interface ICommand {
 	find?: string; // use regular search e.g. "** what"
 	regexp?: string; // use regexp, need to escape e.g. "(\\n)*"
 	replace: string; // replace with groups e.g. "$2\n$1"
-	global?: boolean; // default true, used in regexp
+	flags?: string; // default to "/g", e.g. "gm", "u", "im"
 }
