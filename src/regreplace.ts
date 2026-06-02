@@ -5,11 +5,11 @@
  * @version 0.0.1
  */
 
-import { dirname, extname } from 'path';
-import { TextDocument, window, TextEdit, TextEditorEdit, Range, Position } from 'vscode';
-import { getConfiguration, getMaxRange } from './utils';
-import onSave from './on-save';
 import * as DiffMatchPatch from 'diff-match-patch';
+import { dirname, extname } from 'path';
+import { Position, Range, TextDocument, window } from 'vscode';
+import onSave from './on-save';
+import { getConfiguration } from './utils';
 
 /**
  * calculate target text by applying all active regex rules
@@ -97,8 +97,8 @@ export function calculateTargetTextForAllRules(
 					return;
 				}
 
-				const reg =
-					command.global === false ? new RegExp(regexQuery) : new RegExp(regexQuery, 'g');
+				const flags = command.global === false ? 'u' : 'gu';
+				const reg = new RegExp(regexQuery, flags);
 				resultText = resultText.replace(reg, regexReplace);
 			} catch (error) {
 				if (!getConfiguration<boolean>('suppress-warnings')) {
