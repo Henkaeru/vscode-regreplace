@@ -1,0 +1,34 @@
+{
+  "commands": [
+    {
+      "name": "single to double quote in html",
+      "match": "\\.html?$",
+      "regexp": "(')(.*?)(')",
+      "replace": "\"$2\""
+    },
+    {
+      "name": "trim trailing whitespace",
+      "match": ".*",
+      "regexp": "[ \\t]+$",
+      "replace": "",
+      "flags": "gm"
+    }
+  ],
+  "bulk-exclude-globs": [
+    "**/.git/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/out/**",
+    "**/build/**",
+    "**/.cache/**",
+    "**/__pycache__/**",
+    "**/.venv/**",
+    "**/venv/**"
+  ],
+  "bulk-exclude-extensions": [
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf",
+    ".zip", ".gz", ".tar", ".exe", ".dll", ".so", ".woff", ".woff2",
+    ".wasm", ".pyc", ".class"
+  ],
+  "bulk-text-only": true
+}

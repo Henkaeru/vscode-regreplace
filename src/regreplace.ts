@@ -6,50 +6,62 @@
  */
 
 import * as DiffMatchPatch from 'diff-match-patch';
-import { dirname, extname } from 'path';
-import { Position, Range, TextDocument, window } from 'vscode';
+import { Position, Range, TextDocument, TextEdit, window, workspace, WorkspaceEdit } from 'vscode';
 import onSave from './on-save';
+import {
+	applyFilePreviews,
+	buildFilePreview,
+	pickExecutionMode,
+	previewAndMaybeApply,
+} from './preview';
 import { getConfiguration } from './utils';
 
+export interface ICommand {
+	name?: string;
+	match?: string | string[];
+	exclude?: string | string[];
+	language?: string | string[];
+	priority?: number;
+	find?: string;
+	regexp?: string;
+	replace: string;
+	flags?: string;
+	global?: boolean;
+}
+
 /**
- * calculate target text by applying all active regex rules
- *
- * @param document document to work on
+ * calculate target text by applying regex rules
  */
-export function calculateTargetTextForAllRules(
+export function calculateTargetText(
 	document: TextDocument,
-	singleCommand?: ICommand,
-): string {
+	rules?: ICommand[],
+): string | undefined {
 	try {
-		const commands = getConfiguration<ICommand[]>('commands');
+		const allCommands = getConfiguration<ICommand[]>('commands');
+		const commands = rules ?? allCommands;
 
 		const currentText = document.getText();
 		const fileName = document.fileName;
-		const extension = extname(fileName);
-		const directory = dirname(fileName);
+
 		const fileMatches = (pattern: string) =>
 			pattern && pattern.length > 0 && new RegExp(pattern).test(fileName);
 
 		const language = document.languageId;
 
-		// filter all commands with filematch patterns
 		const activeCommands = commands.filter(cfg => {
 			const matchPattern = cfg.match || '';
 			const negatePattern = cfg.exclude || '';
 
-			// if no match pattern was provided, or if match pattern succeeds
 			const isMatch =
 				typeof matchPattern === 'string'
 					? matchPattern.length === 0 || fileMatches(matchPattern)
 					: matchPattern.some(mp => fileMatches(mp));
 
-			// negation has to be explicitly provided
 			const isNegate =
 				typeof negatePattern === 'string'
 					? negatePattern.length > 0 && fileMatches(negatePattern)
 					: negatePattern.some(mp => fileMatches(mp));
 
-			// check if language is set
 			const hasLanugageId = cfg.language != null;
 			const isLanguageMatch =
 				hasLanugageId &&
@@ -57,44 +69,35 @@ export function calculateTargetTextForAllRules(
 					? language === cfg.language
 					: cfg.language.some(l => l === language));
 
-			// negation wins over match
 			return !isNegate && (hasLanugageId ? isLanguageMatch : isMatch);
 		});
 
-		// return if no commands
 		if (activeCommands.length === 0) {
 			return;
 		}
 
-		// sort commands with priority
 		const sortedCommands = activeCommands.sort((a, b) => (a.priority || 0) - (b.priority || 0));
 
-		// use single command if provided
-		const usedCommands = singleCommand != null ? [singleCommand] : sortedCommands;
-
-		// run through all active commands
 		let resultText = currentText;
-		usedCommands.forEach(command => {
+		for (const command of sortedCommands) {
 			if (command == null) {
-				return;
+				continue;
 			}
 			try {
 				let regexQuery, regexReplace;
 
-				// find via regex or regular find
 				if (command.regexp && command.regexp.length > 0) {
 					regexQuery = command.regexp;
 				} else if (command.find && command.find.length > 0) {
 					regexQuery = command.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 				} else {
-					return;
+					continue;
 				}
 
-				// result
 				if (command.replace != null) {
 					regexReplace = command.replace;
 				} else {
-					return;
+					continue;
 				}
 
 				const flags = command.flags ?? 'g';
@@ -108,7 +111,7 @@ export function calculateTargetTextForAllRules(
 				}
 				return null;
 			}
-		});
+		}
 
 		return resultText;
 	} catch (error) {
@@ -119,23 +122,19 @@ export function calculateTargetTextForAllRules(
 	}
 }
 
-/**
- * calculate an array of diffs
- *
- * @param source text for diff
- * @param target text for diff
- */
+/** @deprecated use calculateTargetText */
+export function calculateTargetTextForAllRules(
+	document: TextDocument,
+	singleCommand?: ICommand,
+): string | undefined {
+	return calculateTargetText(document, singleCommand ? [singleCommand] : undefined);
+}
+
 export function getDiff(source, target) {
 	var dmp = new DiffMatchPatch();
 	return dmp.diff_main(source, target);
 }
 
-/**
- * we can calculate position from index
- *
- * @param text as string
- * @param idx as number
- */
 export function getPositionFromIndex(text: string, idx: number) {
 	var front = text.substring(0, idx);
 	var lineEndings = front.match(/\n/g);
@@ -161,28 +160,18 @@ interface CustemTextEdit {
 	value: string;
 }
 
-/**
- * calculate array of custom text edits
- *
- * @param source text for edits
- * @param target
- */
 export function getCustomEdits(source, target): CustemTextEdit[] {
 	var diff = getDiff(source, target);
 
 	var edits = [];
 	var currentIndex = 0;
 
-	// for each diff in our
 	diff.forEach(([action, value], idx) => {
 		switch (action) {
 			case 0:
-				// keep action
-				// increase pointer with length
 				currentIndex += value.length;
 				break;
 			case -1:
-				// delete action
 				let fromIdx = currentIndex;
 				let toIdx = currentIndex + value.length;
 				let sourceRange = new Range(
@@ -190,7 +179,6 @@ export function getCustomEdits(source, target): CustemTextEdit[] {
 					getPositionFromIndex(source, toIdx),
 				);
 
-				// if next action is insert we do replace instead
 				if (idx < diff.length - 1 && diff[idx + 1][0] === 1) {
 					edits.push({
 						action: CustomEditType.Replace,
@@ -210,7 +198,6 @@ export function getCustomEdits(source, target): CustemTextEdit[] {
 				}
 				break;
 			case 1:
-				// insert action
 				if (idx == 0 || diff[idx - 1][0] !== -1) {
 					const p = getPositionFromIndex(source, currentIndex);
 					edits.push({
@@ -220,24 +207,44 @@ export function getCustomEdits(source, target): CustemTextEdit[] {
 						value: value,
 					});
 				}
-				// last action was delete, we skip
 				break;
 		}
 	});
 	return edits;
 }
 
+export function buildTextEdits(source: string, target: string): TextEdit[] {
+	const edits = getCustomEdits(source, target);
+	return edits.map(e => {
+		switch (e.action) {
+			case CustomEditType.Replace:
+			case CustomEditType.Insert:
+				return new TextEdit(e.range, e.value);
+			case CustomEditType.Delete:
+				return new TextEdit(e.range, '');
+		}
+	});
+}
 
+export async function applyRegreplaceToDocument(
+	document: TextDocument,
+	rules?: ICommand[],
+): Promise<boolean> {
+	const newText = calculateTargetText(document, rules);
+	if (newText == null || newText === document.getText()) {
+		return false;
+	}
 
+	const textEdits = buildTextEdits(document.getText(), newText);
+	const workspaceEdit = new WorkspaceEdit();
+	workspaceEdit.set(document.uri, textEdits);
+	return workspace.applyEdit(workspaceEdit);
+}
 
-
-//
-// ------------------------------
-function applyEditsForNewText(regreplacedText) {
+function applyEditsForNewText(regreplacedText: string) {
 	const { activeTextEditor: editor, activeTextEditor: { document } } = window;
 
 	return editor.edit(edit => {
-		// v1 use diff edits
 		const edits = getCustomEdits(document.getText(), regreplacedText);
 		edits.forEach(e => {
 			switch (e.action) {
@@ -253,21 +260,34 @@ function applyEditsForNewText(regreplacedText) {
 			}
 		});
 		return edit;
-
-		// v0 use replace all
-		// return edit.replace(getMaxRange(), regreplacedText)
 	});
 }
 
-export function regreplaceCurrentDocument() {
-	const { activeTextEditor: editor, activeTextEditor: { document } } = window;
-
-	const regreplacedText = calculateTargetTextForAllRules(document);
-	if (!regreplacedText || regreplacedText === document.getText()) {
+export async function regreplaceCurrentDocument() {
+	const editor = window.activeTextEditor;
+	if (!editor) {
+		window.showInformationMessage('RegReplace: No active editor.');
 		return;
 	}
 
-	applyEditsForNewText(regreplacedText);
+	const mode = await pickExecutionMode('file');
+	if (!mode) {
+		return;
+	}
+
+	const { document } = editor;
+	const preview = buildFilePreview(document);
+	if (!preview) {
+		window.showInformationMessage('RegReplace: No changes needed.');
+		return;
+	}
+
+	if (mode === 'preview') {
+		await previewAndMaybeApply([preview]);
+		return;
+	}
+
+	await applyEditsForNewText(calculateTargetText(document)!);
 }
 
 export async function saveWithoutReplacing() {
@@ -275,42 +295,59 @@ export async function saveWithoutReplacing() {
 	onSave.bypass(async () => await document.save());
 }
 
-export function runSingleRule() {
-	const { activeTextEditor: { document } } = window;
+export async function pickRules(): Promise<ICommand[] | undefined> {
 	const commands = getConfiguration<ICommand[]>('commands');
-	const commandNames = commands.map(
-		(cmd, idx) => `${idx}: ${cmd.name}` || `${idx}: Unnamed rule`,
-	);
-	window.showQuickPick(commandNames).then(selected => {
-		console.log(selected);
-		if (selected != null) {
-			const idx = parseInt(selected.substring(0, selected.indexOf(':')));
-			const command = commands[idx];
+	if (commands.length === 0) {
+		window.showInformationMessage('No regreplace rules configured.');
+		return;
+	}
 
-			const regreplacedText = calculateTargetTextForAllRules(document, command);
-			if (!regreplacedText || regreplacedText === document.getText()) {
-				return;
-			}
+	const items = commands.map((cmd, idx) => ({
+		label: cmd.name || `Unnamed rule ${idx}`,
+		description: cmd.regexp || cmd.find || '',
+		picked: true,
+		rule: cmd,
+	}));
 
-			applyEditsForNewText(regreplacedText);
-		}
+	const selected = await window.showQuickPick(items, {
+		canPickMany: true,
+		placeHolder: 'Select rules to run',
 	});
+	if (!selected || selected.length === 0) {
+		return;
+	}
+	return selected.map(s => s.rule);
 }
 
+export async function runSelectedRulesOnCurrentFile() {
+	const editor = window.activeTextEditor;
+	if (!editor) {
+		window.showInformationMessage('RegReplace: No active editor.');
+		return;
+	}
 
+	const rules = await pickRules();
+	if (!rules) {
+		return;
+	}
 
+	const mode = await pickExecutionMode('file');
+	if (!mode) {
+		return;
+	}
 
+	const { document } = editor;
+	const preview = buildFilePreview(document, rules);
+	if (!preview) {
+		window.showInformationMessage('RegReplace: No changes needed.');
+		return;
+	}
 
-// types
-// ------------------------------
-interface ICommand {
-	name?: string; // just for keepsake
-	match?: string | string[]; // regex expression e.g. "\\.(ts|js|tsx)$" or ["\\.(ts|js|tsx)$"]
-	exclude?: string | string[]; // will overrule match e.g. "^\\.$" exclude dot files
-	language?: string | string[]; // used instead of match, exclude will still work e.g. "typescript"
-	priority?: number; // execution prio
-	find?: string; // use regular search e.g. "** what"
-	regexp?: string; // use regexp, need to escape e.g. "(\\n)*"
-	replace: string; // replace with groups e.g. "$2\n$1"
-	flags?: string; // default to "/g", e.g. "gm", "u", "im"
+	if (mode === 'preview') {
+		await previewAndMaybeApply([preview]);
+		return;
+	}
+
+	const regreplacedText = calculateTargetText(document, rules)!;
+	await applyEditsForNewText(regreplacedText);
 }

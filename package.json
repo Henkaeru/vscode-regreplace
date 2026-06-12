@@ -2,7 +2,7 @@
     "name": "regreplace",
     "displayName": "regreplace",
     "description": "Regular expressions replacing befor save.",
-    "version": "1.3.1",
+    "version": "1.4.0",
     "publisher": "DomiR",
     "license": "MIT",
     "homepage": "https://github.com/DomiR/vscode-regreplace/blob/master/README.md",
@@ -42,14 +42,31 @@
                 "title": "RegReplace: Run all"
             },
             {
-                "command": "regreplace.run-single-rule",
-                "title": "RegReplace: Run single rule"
+                "command": "regreplace.run-selected-rules",
+                "title": "RegReplace: Run selected rules"
+            },
+            {
+                "command": "regreplace.run-on-workspace",
+                "title": "RegReplace: Run on workspace..."
+            },
+            {
+                "command": "regreplace.run-on-folder",
+                "title": "RegReplace: Run on folder..."
             },
             {
                 "command": "regreplace.save-without-regreplace",
                 "title": "RegReplace: Save without replacing"
             }
         ],
+        "menus": {
+            "explorer/context": [
+                {
+                    "command": "regreplace.run-on-folder",
+                    "when": "explorerResourceIsFolder",
+                    "group": "7_modification@1"
+                }
+            ]
+        },
         "configuration": {
             "title": "Regreplace configuration",
             "properties": {
@@ -62,6 +79,152 @@
                     "type": "boolean",
                     "default": false,
                     "description": "Suppress warnings when regreplace fails."
+                },
+                "regreplace.bulk-include": {
+                    "type": "string",
+                    "default": "**/*",
+                    "description": "Glob for files included in workspace/folder bulk operations."
+                },
+                "regreplace.bulk-exclude-globs": {
+                    "type": "array",
+                    "default": [
+                        "**/.git/**",
+                        "**/node_modules/**",
+                        "**/.svn/**",
+                        "**/.hg/**",
+                        "**/dist/**",
+                        "**/out/**",
+                        "**/build/**",
+                        "**/.next/**",
+                        "**/.nuxt/**",
+                        "**/.svelte-kit/**",
+                        "**/.angular/**",
+                        "**/.docusaurus/**",
+                        "**/.cache/**",
+                        "**/.parcel-cache/**",
+                        "**/.vite/**",
+                        "**/.turbo/**",
+                        "**/.eslintcache/**",
+                        "**/__pycache__/**",
+                        "**/.pytest_cache/**",
+                        "**/.mypy_cache/**",
+                        "**/.ruff_cache/**",
+                        "**/.tox/**",
+                        "**/.venv/**",
+                        "**/venv/**",
+                        "**/.npm/**",
+                        "**/.yarn/**",
+                        "**/.pnpm-store/**",
+                        "**/bower_components/**",
+                        "**/target/**",
+                        "**/.gradle/**",
+                        "**/.idea/**",
+                        "**/.vs/**",
+                        "**/coverage/**",
+                        "**/.nyc_output/**",
+                        "**/.vscode-test/**",
+                        "**/.terraform/**",
+                        "**/.serverless/**",
+                        "**/*.egg-info/**"
+                    ],
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Path globs excluded from bulk operations (cache folders, dependencies, build output)."
+                },
+                "regreplace.bulk-exclude": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Legacy glob exclude string (merged with bulk-exclude-globs). Prefer bulk-exclude-globs."
+                },
+                "regreplace.bulk-exclude-extensions": {
+                    "type": "array",
+                    "default": [
+                        ".png",
+                        ".jpg",
+                        ".jpeg",
+                        ".gif",
+                        ".webp",
+                        ".ico",
+                        ".bmp",
+                        ".tif",
+                        ".tiff",
+                        ".heic",
+                        ".avif",
+                        ".mp3",
+                        ".mp4",
+                        ".wav",
+                        ".ogg",
+                        ".webm",
+                        ".avi",
+                        ".mov",
+                        ".mkv",
+                        ".flac",
+                        ".pdf",
+                        ".zip",
+                        ".gz",
+                        ".tar",
+                        ".rar",
+                        ".7z",
+                        ".bz2",
+                        ".xz",
+                        ".jar",
+                        ".war",
+                        ".exe",
+                        ".dll",
+                        ".so",
+                        ".dylib",
+                        ".bin",
+                        ".dat",
+                        ".wasm",
+                        ".class",
+                        ".pyc",
+                        ".pyo",
+                        ".o",
+                        ".a",
+                        ".lib",
+                        ".obj",
+                        ".woff",
+                        ".woff2",
+                        ".ttf",
+                        ".otf",
+                        ".eot",
+                        ".sqlite",
+                        ".sqlite3",
+                        ".db"
+                    ],
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "File extensions excluded from bulk operations (include the dot, e.g. \".png\")."
+                },
+                "regreplace.bulk-exclude-mime-types": {
+                    "type": "array",
+                    "default": [
+                        "image/*",
+                        "audio/*",
+                        "video/*",
+                        "font/*",
+                        "application/octet-stream",
+                        "application/pdf",
+                        "application/zip",
+                        "application/gzip",
+                        "application/x-gzip",
+                        "application/x-tar",
+                        "application/x-7z-compressed",
+                        "application/x-rar-compressed",
+                        "application/java-archive",
+                        "application/wasm"
+                    ],
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Mime types excluded from bulk operations. Supports wildcards (e.g. \"image/*\")."
+                },
+                "regreplace.bulk-text-only": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Skip files that look binary (contain null bytes). Catches non-text files without a known extension."
                 },
                 "regreplace.commands": {
                     "type": "array",

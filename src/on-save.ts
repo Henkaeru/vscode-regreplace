@@ -9,13 +9,10 @@ import {
 	Disposable,
 	TextDocumentWillSaveEvent,
 	TextEdit,
-	workspace,
-	window,
-	Position,
-	Selection,
+	workspace
 } from 'vscode';
-import { calculateTargetTextForAllRules, getCustomEdits, CustomEditType } from './regreplace';
-import { getConfiguration, getMaxRange } from './utils';
+import { calculateTargetTextForAllRules, CustomEditType, getCustomEdits } from './regreplace';
+import { getConfiguration } from './utils';
 
 let subscription: Disposable;
 export default {
